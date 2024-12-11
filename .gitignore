@@ -1,0 +1,11 @@
+/credentials
+/.env.desarrollo
+/.env.preproduccion
+/.env.production
+
+# Terraform
+/terraform/.terraform
+/terraform/terraform.tfstate
+/terraform/terraform.tfstate.backup
+/terraform/variables.tf
+/terraform/terraform_debug.log

@@ -1,0 +1,667 @@
+generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "windows", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+    provider = "mongodb"
+    url      = env("MONGODB_URI")
+}
+
+model Clients {
+    id                 String               @id @default(uuid()) @map("_id")
+    companyName        String // Nombre de la empresa
+    email              String               @unique
+    password           String
+    logoCompany        String? // URL del logo de la empresa
+    contacts           Contact[] // Lista de contactos adicionales
+    apps               AppDevelop[] // Relación con las aplicaciones desarrolladas para este cliente
+    reports            ReportIssue[] // Relación con los reportes de errores realizados por este cliente
+    ReportComment      ReportComment[]
+    ApiKeyPrice        ApiKeyPrice[]
+    ApiInvoice         ApiInvoice[]
+    Proyects           Proyects[]
+    clientVerification ClientVerification[]
+    createdAt          DateTime             @default(now())
+    updatedAt          DateTime             @updatedAt
+    BlocksInChain      BlocksInChain[]
+    UserRole           UserRole[]
+    Notification       Notification[]
+    ChangeLog          ChangeLog[]
+}
+
+model Role {
+    id          String     @id @default(uuid()) @map("_id")
+    name        String     @unique // Nombre del rol (e.g., "Admin", "User", "Developer")
+    description String? // Descripción del rol
+    users       UserRole[]
+    createdAt   DateTime   @default(now())
+    updatedAt   DateTime   @updatedAt
+}
+
+model UserRole {
+    id     String  @id @default(uuid()) @map("_id")
+    userId String
+    user   Clients @relation(fields: [userId], references: [id])
+    roleId String
+    role   Role    @relation(fields: [roleId], references: [id])
+}
+
+model Contact {
+    id       String  @id @default(uuid()) @map("_id")
+    name     String // Nombre del contacto
+    phone    String // Teléfono del contacto
+    mail     String // Correo electrónico del contacto
+    clientId String // Relación con el cliente al que pertenece
+    client   Clients @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model ClientVerification {
+    id                String             @id @default(uuid()) @map("_id")
+    clientId          String // Relación con el cliente que se está verificando
+    client            Clients            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+    companyName       String // Nombre de la empresa a verificar
+    nitOrTaxId        String // Número de identificación tributaria o NIT
+    legalDocs         String[] // URLs de documentos legales (certificado de existencia, identificación tributaria, etc.)
+    country           String // País de registro de la empresa
+    status            VerificationStatus @default(pending) // Estado del proceso de verificación
+    verificationSteps VerificationStep[] // Relación con los pasos de verificación
+    verifiedBy        String? // ID del administrador que aprobó/rechazó la verificación
+    comments          String? // Comentarios adicionales sobre el estado de la verificación
+    createdAt         DateTime           @default(now())
+    updatedAt         DateTime           @updatedAt
+}
+
+model VerificationStep {
+    id             String             @id @default(uuid()) @map("_id")
+    verificationId String // Relación con el proceso de verificación asociado
+    verification   ClientVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+    stepName       String // Nombre del paso (e.g., "Validación de documentos", "Confirmación de dirección")
+    status         StepStatus         @default(pending) // Estado del paso
+    description    String // Descripción detallada del paso
+    documents      String[] // Documentos adicionales (si aplica)
+    completedAt    DateTime? // Fecha en la que se completó el paso
+    createdAt      DateTime           @default(now())
+    updatedAt      DateTime           @updatedAt
+}
+
+model Proyects {
+    id              String            @id @default(uuid()) @map("_id")
+    name            String
+    client          Clients           @relation(fields: [clientId], references: [id])
+    clientId        String
+    apps            AppDevelop[]
+    status          ProyectStatus
+    ApiKey          ApiKey[]
+    createdAt       DateTime          @default(now())
+    updatedAt       DateTime          @updatedAt
+    Task            Task[]
+    ProjectPhase    ProjectPhase[]
+    JobPosition     JobPosition[]
+    ProjectResource ProjectResource[]
+}
+
+model ProjectResource {
+    id          String   @id @default(uuid()) @map("_id")
+    projectId   String // Relación con el proyecto al que pertenece el recurso
+    project     Proyects @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    fileUrl     String // URL del archivo
+    description String? // Descripción del recurso
+    fileType    String // Tipo de archivo (e.g., "pdf", "image", "video")
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+}
+
+model ProjectPhase {
+    id          String      @id @default(uuid()) @map("_id")
+    name        String // Nombre de la fase (e.g., "Planeación", "Desarrollo", "Pruebas")
+    description String? // Descripción detallada de la fase
+    projectId   String // Relación con el proyecto al que pertenece
+    project     Proyects    @relation(fields: [projectId], references: [id])
+    status      PhaseStatus @default(notStarted) // Estado actual de la fase
+    tasks       Task[] // Tareas asociadas a esta fase
+    startDate   DateTime? // Fecha de inicio de la fase
+    endDate     DateTime? // Fecha de finalización de la fase
+    createdAt   DateTime    @default(now())
+    updatedAt   DateTime    @updatedAt
+}
+
+model JobPosition {
+    id          String           @id @default(uuid()) @map("_id")
+    name        String // Nombre del puesto (e.g., "Frontend Developer", "Backend Developer")
+    description String? // Descripción del puesto
+    skills      String[] // Lista de habilidades requeridas para el puesto
+    projectId   String // Relación con el proyecto que necesita este puesto
+    project     Proyects         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    applicants  JobApplication[] // Relación con las aplicaciones a este puesto
+    status      JobStatus        @default(open) // Estado del puesto
+    createdAt   DateTime         @default(now())
+    updatedAt   DateTime         @updatedAt
+    Task        Task[]
+}
+
+model JobApplication {
+    id            String            @id @default(uuid()) @map("_id")
+    developerId   String // Relación con el desarrollador que aplica
+    developer     Developer         @relation(fields: [developerId], references: [id])
+    jobId         String // Relación con el puesto al que aplica
+    job           JobPosition       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+    status        ApplicationStatus @default(pending) // Estado de la aplicación
+    coverLetter   String? // Carta de presentación
+    skillsMatched String[] // Habilidades que coinciden con los requisitos
+    appliedAt     DateTime          @default(now()) // Fecha de aplicación
+    updatedAt     DateTime          @updatedAt
+}
+
+model Skill {
+    id          String      @id @default(uuid()) @map("_id")
+    name        String      @unique // Nombre de la habilidad (e.g., "JavaScript", "Docker")
+    description String? // Descripción de la habilidad
+    Developer   Developer[]
+}
+
+model AppDevelop {
+    id            String        @id @default(uuid()) @map("_id")
+    name          String // Nombre de la aplicación
+    description   String? // Descripción de la aplicación
+    status        StatusApp     @default(inDevelopment) // Estado de la aplicación
+    repositoryUrl String? // URL del repositorio de código
+    deploymentUrl String? // URL de la aplicación desplegada
+    clientId      String // ID del cliente que solicitó la aplicación
+    client        Clients       @relation(fields: [clientId], references: [id])
+    createdAt     DateTime      @default(now())
+    updatedAt     DateTime      @updatedAt
+    reports       ReportIssue[] // Relación con los reportes de errores
+    Proyects      Proyects?     @relation(fields: [proyectsId], references: [id])
+    proyectsId    String?
+    Task          Task[]
+}
+
+model Task {
+    id             String          @id @default(uuid()) @map("_id")
+    name           String // Nombre de la tarea
+    description    String? // Descripción de la tarea
+    status         TaskStatus      @default(toDo) // Estado del workflow
+    priority       TaskPriority    @default(medium) // Prioridad de la tarea
+    dueDate        DateTime? // Fecha límite para la tarea
+    projectId      String // Relación con el proyecto al que pertenece
+    project        Proyects        @relation(fields: [projectId], references: [id])
+    appId          String? // Relación opcional con una aplicación específica
+    app            AppDevelop?     @relation(fields: [appId], references: [id])
+    developers     TaskDeveloper[] // Relación explícita con los desarrolladores asignados
+    comments       TaskComment[] // Comentarios en la tarea
+    createdAt      DateTime        @default(now())
+    updatedAt      DateTime        @updatedAt
+    ProjectPhase   ProjectPhase?   @relation(fields: [projectPhaseId], references: [id])
+    projectPhaseId String?
+    jobId          String? // Relación con un puesto de trabajo asignado
+    job            JobPosition?    @relation(fields: [jobId], references: [id])
+    TaskResource   TaskResource[]
+}
+
+model TaskResource {
+    id          String   @id @default(uuid()) @map("_id")
+    taskId      String // Relación con la tarea a la que pertenece el recurso
+    task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+    fileUrl     String // URL del archivo
+    description String? // Descripción del recurso
+    fileType    String // Tipo de archivo (e.g., "pdf", "image", "video")
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+}
+
+model Developer {
+    id             String           @id @default(uuid()) @map("_id")
+    name           String // Nombre del desarrollador
+    email          String           @unique // Correo del desarrollador
+    tasks          TaskDeveloper[] // Relación explícita con las tareas asignadas
+    TaskComment    TaskComment[] // Relación con comentarios realizados
+    createdAt      DateTime         @default(now())
+    updatedAt      DateTime         @updatedAt
+    JobApplication JobApplication[]
+    Skill          Skill?           @relation(fields: [skillId], references: [id])
+    skillId        String?
+}
+
+model TaskDeveloper {
+    id          String    @id @default(uuid()) @map("_id")
+    taskId      String // Relación con la tarea
+    task        Task      @relation(fields: [taskId], references: [id])
+    developerId String // Relación con el desarrollador
+    developer   Developer @relation(fields: [developerId], references: [id])
+    assignedAt  DateTime  @default(now()) // Fecha en que se asignó el desarrollador a la tarea
+}
+
+model TaskComment {
+    id          String    @id @default(uuid()) @map("_id")
+    taskId      String // Relación con la tarea
+    task        Task      @relation(fields: [taskId], references: [id])
+    developerId String // Relación con el desarrollador que hizo el comentario
+    developer   Developer @relation(fields: [developerId], references: [id])
+    content     String // Contenido del comentario
+    createdAt   DateTime  @default(now())
+}
+
+model ApiKey {
+    id          String        @id @default(uuid()) @map("_id")
+    key         String        @unique // La clave de API generada
+    status      ApiKeyStatus  @default(active) // Estado de la clave API
+    title       String
+    description String?
+    proyect     Proyects      @relation(fields: [proyectId], references: [id])
+    ApiKeyPrice ApiKeyPrice[]
+    ReportIssue ReportIssue[]
+    createdAt   DateTime      @default(now())
+    updatedAt   DateTime      @updatedAt
+    ApiInvoice  ApiInvoice[]
+    proyectId   String
+}
+
+model ApiKeyPrice {
+    id               String              @id @default(uuid()) @map("_id")
+    apiKey           ApiKey?             @relation(fields: [apiKeyId], references: [id])
+    apiKeyId         String? // Cambiado a opcional
+    client           Clients?            @relation(fields: [clientId], references: [id])
+    clientId         String? // Cambiado a opcional
+    subscriptionType ApiKeySubscriptions // Tipo de suscripción (BUG_SUPPORT o FEATURE_DEVELOPMENT)
+    monthlyFee       Float               @default(5000000) // Tarifa mensual por la suscripción de la API
+    isFree           Boolean             @default(false)
+    fees             Int
+    createdAt        DateTime            @default(now())
+    updatedAt        DateTime            @updatedAt
+}
+
+model ApiInvoice {
+    id            String         @id @default(uuid()) @map("_id")
+    clientId      String // Relación con el cliente al que pertenece la factura
+    client        Clients        @relation(fields: [clientId], references: [id])
+    apiKeyId      String // Relación con la clave de API facturada
+    apiKey        ApiKey         @relation(fields: [apiKeyId], references: [id])
+    indexFee      Int
+    completeFees  Int            @default(0)
+    month         Int // Mes de facturación (1-12)
+    year          Int // Año de facturación
+    totalAmount   Float // Monto total de la factura
+    paymentStatus PaymentStatus  @default(pending) // Estado de pago de la factura
+    createdAt     DateTime       @default(now())
+    updatedAt     DateTime       @updatedAt
+    ProofPayment  ProofPayment[]
+}
+
+model ProofPayment {
+    id                  String                @id @default(uuid()) @map("_id")
+    ApiInvoice          ApiInvoice            @relation(fields: [apiInvoiceId], references: [id])
+    apiInvoiceId        String
+    indexFee            Int
+    value               Float
+    ProofIMagesRegister ProofIMagesRegister[]
+    createdAt           DateTime              @default(now())
+    updatedAt           DateTime              @updatedAt
+}
+
+model ProofIMagesRegister {
+    id             String       @id @default(uuid()) @map("_id")
+    proofPayment   ProofPayment @relation(fields: [proofPaymentId], references: [id])
+    proofPaymentId String
+    indexFee       String
+    image          String
+    value          Float
+    isVerify       Boolean      @default(false)
+    finalInvoice   String?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+}
+
+model ReportIssue {
+    id             String           @id @default(uuid()) @map("_id")
+    description    String // Descripción detallada del error
+    images         String[] // URLs de las imágenes que el cliente sube para describir el error
+    status         StatusIssue      @default(open) // Estado del reporte de error
+    priority       PriorityStatus   @default(low) // Prioridad del reporte de error
+    appId          String // ID de la aplicación relacionada con el reporte
+    app            AppDevelop       @relation(fields: [appId], references: [id])
+    clientId       String // ID del cliente que reporta el error
+    client         Clients          @relation(fields: [clientId], references: [id])
+    apiKey         ApiKey           @relation(fields: [apiKeyId], references: [id])
+    apiKeyId       String
+    ReportProgress ReportProgress[]
+    ReportComment  ReportComment[]
+    createdAt      DateTime         @default(now())
+    updatedAt      DateTime         @updatedAt
+}
+
+model ReportProgress {
+    id          String      @id @default(uuid()) @map("_id")
+    reportId    String // ID del reporte asociado
+    report      ReportIssue @relation(fields: [reportId], references: [id])
+    status      StatusIssue @default(inProgress)
+    description String // Descripción detallada del paso
+    images      String[] // Imágenes relacionadas con el paso
+    createdAt   DateTime    @default(now()) // Fecha de creación del paso
+}
+
+model ReportComment {
+    id        String      @id @default(uuid()) @map("_id")
+    reportId  String // ID del reporte asociado
+    report    ReportIssue @relation(fields: [reportId], references: [id])
+    clientId  String
+    client    Clients     @relation(fields: [clientId], references: [id])
+    content   String // Contenido del comentario
+    images    String[] // Imágenes opcionales que acompañan al comentario
+    createdAt DateTime    @default(now()) // Fecha de creación del comentario
+}
+
+model BlocksInChain {
+    id        String    @id @default(uuid()) @map("_id")
+    client    Clients   @relation(fields: [clientsId], references: [id])
+    clientsId String
+    typeBlock TypeBlock
+    hash      String
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+}
+
+model Notification {
+    id        String   @id @default(uuid()) @map("_id")
+    clientId  String // Relación con el usuario notificado
+    client    Clients  @relation(fields: [clientId], references: [id])
+    content   String // Contenido de la notificación
+    isRead    Boolean  @default(false) // Estado de lectura
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model ChangeLog {
+    id         String   @id @default(uuid()) @map("_id")
+    entityId   String // ID del modelo afectado (proyecto, tarea, etc.)
+    entityType String // Tipo de entidad (e.g., "Proyects", "Task", "ReportIssue")
+    changes    Json // Detalle de los cambios realizados
+    clientId   String // Usuario que realizó el cambio
+    client     Clients  @relation(fields: [clientId], references: [id])
+    createdAt  DateTime @default(now())
+}
+
+model SystemConfig {
+    id          String   @id @default(uuid()) @map("_id")
+    key         String   @unique // Clave de la configuración (e.g., "DEFAULT_API_FEE")
+    value       String // Valor asociado
+    description String? // Descripción de la configuración
+    updatedAt   DateTime @updatedAt
+}
+
+enum StatusIssue {
+    open
+    inProgress
+    resolved
+    closed
+}
+
+enum StatusApp {
+    inDevelopment
+    completed
+    maintenance
+    cancelled
+}
+
+enum PriorityStatus {
+    low
+    medium
+    high
+    critical
+}
+
+enum ApiKeyStatus {
+    active // La clave está activa y puede ser usada
+    revoked // La clave ha sido revocada y no es válida
+    expired // La clave ha caducado
+}
+
+enum ApiKeySubscriptions {
+    BUG_SUPPORT // Soporte para bugs con facturación por cada error reportado.
+    FEATURE_DEVELOPMENT // Desarrollo de nuevas funcionalidades con facturación por cada solicitud.
+}
+
+enum PaymentStatus {
+    pending // Pago pendiente
+    paid // Pago completado
+    overdue // Pago atrasado
+}
+
+enum ProyectStatus {
+    on_call
+    call_reserved
+    planning
+    in_development
+    implemented
+    running
+    maintenance
+}
+
+enum VerificationStatus {
+    pending // Proceso en curso
+    approved // Verificación aprobada
+    rejected // Verificación rechazada
+}
+
+enum StepStatus {
+    pending // Paso pendiente
+    inProgress // Paso en progreso
+    completed // Paso completado
+    failed // Paso fallido
+}
+
+enum TaskStatus {
+    toDo // Por hacer
+    inProgress // En progreso
+    codeReview // En revisión
+    done // Completado
+    blocked // Bloqueado
+}
+
+enum TaskPriority {
+    low // Baja
+    medium // Media
+    high // Alta
+    critical // Crítica
+}
+
+enum TypeBlock {
+    process
+    payment
+}
+
+enum PhaseStatus {
+    notStarted // Fase aún no iniciada
+    inProgress // Fase en progreso
+    completed // Fase completada
+    blocked // Fase bloqueada por algún impedimento
+}
+
+enum JobStatus {
+    open // Puesto abierto para aplicaciones
+    closed // Puesto cerrado
+    filled // Puesto ocupado
+}
+
+enum ApplicationStatus {
+    pending // Aplicación pendiente de revisión
+    accepted // Aplicación aceptada
+    rejected // Aplicación rechazada
+}
+
+model ReportIssue {
+    id             String           @id @default(uuid()) @map("_id")
+    description    String // Descripción detallada del error
+    images         String[] // URLs de las imágenes que el cliente sube para describir el error
+    status         StatusIssue      @default(open) // Estado del reporte de error
+    priority       PriorityStatus   @default(low) // Prioridad del reporte de error
+    appId          String // ID de la aplicación relacionada con el reporte
+    app            AppDevelop       @relation(fields: [appId], references: [id])
+    clientId       String // ID del cliente que reporta el error
+    client         Clients          @relation(fields: [clientId], references: [id])
+    apiKey         ApiKey           @relation(fields: [apiKeyId], references: [id])
+    apiKeyId       String
+    ReportProgress ReportProgress[]
+    ReportComment  ReportComment[]
+    createdAt      DateTime         @default(now())
+    updatedAt      DateTime         @updatedAt
+}
+
+model ReportProgress {
+    id          String      @id @default(uuid()) @map("_id")
+    reportId    String // ID del reporte asociado
+    report      ReportIssue @relation(fields: [reportId], references: [id])
+    status      StatusIssue @default(inProgress)
+    description String // Descripción detallada del paso
+    images      String[] // Imágenes relacionadas con el paso
+    createdAt   DateTime    @default(now()) // Fecha de creación del paso
+}
+
+model ReportComment {
+    id        String      @id @default(uuid()) @map("_id")
+    reportId  String // ID del reporte asociado
+    report    ReportIssue @relation(fields: [reportId], references: [id])
+    clientId  String
+    client    Clients     @relation(fields: [clientId], references: [id])
+    content   String // Contenido del comentario
+    images    String[] // Imágenes opcionales que acompañan al comentario
+    createdAt DateTime    @default(now()) // Fecha de creación del comentario
+}
+
+model BlocksInChain {
+    id        String    @id @default(uuid()) @map("_id")
+    client    Clients   @relation(fields: [clientsId], references: [id])
+    clientsId String
+    typeBlock TypeBlock
+    hash      String
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+}
+
+model Notification {
+    id        String   @id @default(uuid()) @map("_id")
+    clientId  String // Relación con el usuario notificado
+    client    Clients  @relation(fields: [clientId], references: [id])
+    content   String // Contenido de la notificación
+    isRead    Boolean  @default(false) // Estado de lectura
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model ChangeLog {
+    id         String   @id @default(uuid()) @map("_id")
+    entityId   String // ID del modelo afectado (proyecto, tarea, etc.)
+    entityType String // Tipo de entidad (e.g., "Proyects", "Task", "ReportIssue")
+    changes    Json // Detalle de los cambios realizados
+    clientId   String // Usuario que realizó el cambio
+    client     Clients  @relation(fields: [clientId], references: [id])
+    createdAt  DateTime @default(now())
+}
+
+model SystemConfig {
+    id          String   @id @default(uuid()) @map("_id")
+    key         String   @unique // Clave de la configuración (e.g., "DEFAULT_API_FEE")
+    value       String // Valor asociado
+    description String? // Descripción de la configuración
+    updatedAt   DateTime @updatedAt
+}
+
+enum StatusIssue {
+    open
+    inProgress
+    resolved
+    closed
+}
+
+enum StatusApp {
+    inDevelopment
+    completed
+    maintenance
+    cancelled
+}
+
+enum PriorityStatus {
+    low
+    medium
+    high
+    critical
+}
+
+enum ApiKeyStatus {
+    active // La clave está activa y puede ser usada
+    revoked // La clave ha sido revocada y no es válida
+    expired // La clave ha caducado
+}
+
+enum ApiKeySubscriptions {
+    BUG_SUPPORT // Soporte para bugs con facturación por cada error reportado.
+    FEATURE_DEVELOPMENT // Desarrollo de nuevas funcionalidades con facturación por cada solicitud.
+}
+
+enum PaymentStatus {
+    pending // Pago pendiente
+    paid // Pago completado
+    overdue // Pago atrasado
+}
+
+enum ProyectStatus {
+    on_call
+    call_reserved
+    planning
+    in_development
+    implemented
+    running
+    maintenance
+}
+
+enum VerificationStatus {
+    pending // Proceso en curso
+    approved // Verificación aprobada
+    rejected // Verificación rechazada
+}
+
+enum StepStatus {
+    pending // Paso pendiente
+    inProgress // Paso en progreso
+    completed // Paso completado
+    failed // Paso fallido
+}
+
+enum TaskStatus {
+    toDo // Por hacer
+    inProgress // En progreso
+    codeReview // En revisión
+    done // Completado
+    blocked // Bloqueado
+}
+
+enum TaskPriority {
+    low // Baja
+    medium // Media
+    high // Alta
+    critical // Crítica
+}
+
+enum TypeBlock {
+    process
+    payment
+}
+
+enum PhaseStatus {
+    notStarted // Fase aún no iniciada
+    inProgress // Fase en progreso
+    completed // Fase completada
+    blocked // Fase bloqueada por algún impedimento
+}
+
+enum JobStatus {
+    open // Puesto abierto para aplicaciones
+    closed // Puesto cerrado
+    filled // Puesto ocupado
+}
+
+enum ApplicationStatus {
+    pending // Aplicación pendiente de revisión
+    accepted // Aplicación aceptada
+    rejected // Aplicación rechazada
+}

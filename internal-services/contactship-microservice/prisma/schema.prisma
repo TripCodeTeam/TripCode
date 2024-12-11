@@ -1,0 +1,204 @@
+generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "windows", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+    provider = "mongodb"
+    url      = env("MONGODB_URI")
+}
+
+model Clients {
+    id            String          @id @default(uuid()) @map("_id")
+    companyName   String // Nombre de la empresa
+    email         String          @unique
+    password      String
+    logoCompany   String? // URL del logo de la empresa
+    createdAt     DateTime        @default(now())
+    updatedAt     DateTime        @updatedAt
+    contacts      Contact[] // Lista de contactos adicionales
+    apps          AppDevelop[] // Relación con las aplicaciones desarrolladas para este cliente
+    reports       ReportIssue[] // Relación con los reportes de errores realizados por este cliente
+    apiKeys       ApiKey[] // Relación con las API Keys del cliente
+    ReportComment ReportComment[]
+    ApiKeyPrice   ApiKeyPrice[]
+    ApiInvoice    ApiInvoice[]
+}
+
+model Contact {
+    id       String  @id @default(uuid()) @map("_id")
+    name     String // Nombre del contacto
+    phone    String // Teléfono del contacto
+    mail     String // Correo electrónico del contacto
+    clientId String // Relación con el cliente al que pertenece
+    client   Clients @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model AppDevelop {
+    id            String        @id @default(uuid()) @map("_id")
+    name          String // Nombre de la aplicación
+    description   String? // Descripción de la aplicación
+    status        StatusApp     @default(inDevelopment) // Estado de la aplicación
+    repositoryUrl String? // URL del repositorio de código
+    deploymentUrl String? // URL de la aplicación desplegada
+    clientId      String // ID del cliente que solicitó la aplicación
+    client        Clients       @relation(fields: [clientId], references: [id])
+    createdAt     DateTime      @default(now())
+    updatedAt     DateTime      @updatedAt
+    reports       ReportIssue[] // Relación con los reportes de errores
+    apiKeys       ApiKey[] // Relación opcional con las API Keys usadas en la aplicación
+}
+
+model ApiKey {
+    id          String        @id @default(uuid()) @map("_id")
+    key         String        @unique // La clave de API generada
+    status      ApiKeyStatus  @default(active) // Estado de la clave API
+    title       String
+    description String?
+    clientId    String // Relación con el cliente que posee la clave
+    client      Clients       @relation(fields: [clientId], references: [id])
+    appId       String?
+    app         AppDevelop?   @relation(fields: [appId], references: [id])
+    ApiKeyPrice ApiKeyPrice[]
+    ReportIssue ReportIssue[]
+    createdAt   DateTime      @default(now())
+    updatedAt   DateTime      @updatedAt
+    ApiInvoice  ApiInvoice[]
+}
+
+model ApiKeyPrice {
+    id               String              @id @default(uuid()) @map("_id")
+    apiKey           ApiKey?             @relation(fields: [apiKeyId], references: [id])
+    apiKeyId         String? // Cambiado a opcional
+    client           Clients?            @relation(fields: [clientId], references: [id])
+    clientId         String? // Cambiado a opcional
+    subscriptionType ApiKeySubscriptions // Tipo de suscripción (BUG_SUPPORT o FEATURE_DEVELOPMENT)
+    monthlyFee       Float               @default(5000000) // Tarifa mensual por la suscripción de la API
+    isFree           Boolean             @default(false)
+    fees             Int
+    createdAt        DateTime            @default(now())
+    updatedAt        DateTime            @updatedAt
+}
+
+model ApiInvoice {
+    id            String         @id @default(uuid()) @map("_id")
+    clientId      String // Relación con el cliente al que pertenece la factura
+    client        Clients        @relation(fields: [clientId], references: [id])
+    apiKeyId      String // Relación con la clave de API facturada
+    apiKey        ApiKey         @relation(fields: [apiKeyId], references: [id])
+    indexFee      Int
+    completeFees  Int            @default(0)
+    month         Int // Mes de facturación (1-12)
+    year          Int // Año de facturación
+    totalAmount   Float // Monto total de la factura
+    paymentStatus PaymentStatus  @default(pending) // Estado de pago de la factura
+    createdAt     DateTime       @default(now())
+    updatedAt     DateTime       @updatedAt
+    ProofPayment  ProofPayment[]
+}
+
+model ProofPayment {
+    id                  String                @id @default(uuid()) @map("_id")
+    ApiInvoice          ApiInvoice            @relation(fields: [apiInvoiceId], references: [id])
+    apiInvoiceId        String
+    indexFee            Int
+    value               Float
+    ProofIMagesRegister ProofIMagesRegister[]
+    createdAt           DateTime              @default(now())
+    updatedAt           DateTime              @updatedAt
+}
+
+model ProofIMagesRegister {
+    id             String       @id @default(uuid()) @map("_id")
+    proofPayment   ProofPayment @relation(fields: [proofPaymentId], references: [id])
+    proofPaymentId String
+    indexFee       String
+    image          String
+    value          Float
+    isVerify       Boolean      @default(false)
+    finalInvoice   String?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+}
+
+/// Reports in app - Workflow
+model ReportIssue {
+    id             String           @id @default(uuid()) @map("_id")
+    description    String // Descripción detallada del error
+    images         String[] // URLs de las imágenes que el cliente sube para describir el error
+    status         StatusIssue      @default(open) // Estado del reporte de error
+    priority       PriorityStatus   @default(low) // Prioridad del reporte de error
+    appId          String // ID de la aplicación relacionada con el reporte
+    app            AppDevelop       @relation(fields: [appId], references: [id])
+    clientId       String // ID del cliente que reporta el error
+    client         Clients          @relation(fields: [clientId], references: [id])
+    apiKey         ApiKey           @relation(fields: [apiKeyId], references: [id])
+    apiKeyId       String
+    ReportProgress ReportProgress[]
+    ReportComment  ReportComment[]
+    createdAt      DateTime         @default(now())
+    updatedAt      DateTime         @updatedAt
+}
+
+model ReportProgress {
+    id          String      @id @default(uuid()) @map("_id")
+    reportId    String // ID del reporte asociado
+    report      ReportIssue @relation(fields: [reportId], references: [id])
+    status      StatusIssue @default(inProgress)
+    description String // Descripción detallada del paso
+    images      String[] // Imágenes relacionadas con el paso
+    createdAt   DateTime    @default(now()) // Fecha de creación del paso
+}
+
+model ReportComment {
+    id        String      @id @default(uuid()) @map("_id")
+    reportId  String // ID del reporte asociado
+    report    ReportIssue @relation(fields: [reportId], references: [id])
+    clientId  String
+    client    Clients     @relation(fields: [clientId], references: [id])
+    content   String // Contenido del comentario
+    images    String[] // Imágenes opcionales que acompañan al comentario
+    createdAt DateTime    @default(now()) // Fecha de creación del comentario
+}
+
+// Enum para el estado del reporte de error
+enum StatusIssue {
+    open
+    inProgress
+    resolved
+    closed
+}
+
+// Enum para el estado de la aplicación
+enum StatusApp {
+    inDevelopment
+    completed
+    maintenance
+    cancelled
+}
+
+// Enum para la prioridad del reporte de error
+enum PriorityStatus {
+    low
+    medium
+    high
+    critical
+}
+
+// Enum para el estado de la clave API
+enum ApiKeyStatus {
+    active // La clave está activa y puede ser usada
+    revoked // La clave ha sido revocada y no es válida
+    expired // La clave ha caducado
+}
+
+enum ApiKeySubscriptions {
+    BUG_SUPPORT // Soporte para bugs con facturación por cada error reportado.
+    FEATURE_DEVELOPMENT // Desarrollo de nuevas funcionalidades con facturación por cada solicitud.
+}
+
+enum PaymentStatus {
+    pending // Pago pendiente
+    paid // Pago completado
+    overdue // Pago atrasado
+}
