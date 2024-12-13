@@ -1,0 +1,69 @@
+pipeline {
+    agent any
+
+    environment {
+        GOOGLE_CREDENTIALS = credentials('./credentials/atomic-energy-438322-m8-97772e176a84.json') // Credenciales de cuenta de servicio de GCP en Jenkins
+        PROJECT_ID = 'atomic-energy-438322-m8' // Cambia por el ID de tu proyecto en Google Cloud
+        REGION = 'us-central1' // Cambia por la región donde creaste tu Artifact Registry
+        REPO_NAME = 'tripcode-microservices' // Cambia por el nombre de tu repositorio en Artifact Registry
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm  // Clona el código del repositorio
+            }
+        }
+
+        stage('Authenticate with Google Cloud') {
+            steps {
+                script {
+                    writeFile file: 'gcp-key.json', text: GOOGLE_CREDENTIALS
+                    sh """
+                    gcloud auth activate-service-account --key-file=gcp-key.json
+                    gcloud config set project ${PROJECT_ID}
+                    gcloud auth configure-docker ${REGION}-docker.pkg.dev
+                    """
+                }
+            }
+        }
+
+        stage('Build and Push Docker Images') {
+            steps {
+                script {
+                    def services = ['clients-microservice', 'projects-microservice', 'other-microservice']
+                    for (service in services) {
+                        // Construye y sube la imagen para cada microservicio
+                        sh """
+                        docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${service}:latest ./${service}
+                        docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${service}:latest
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig-id']) { // Acceso a Kubernetes
+                    script {
+                        def services = ['clients-microservice', 'projects-microservice', 'other-microservice']
+                        for (service in services) {
+                            // Despliega la nueva imagen en Kubernetes
+                            sh """
+                            kubectl set image deployment/${service} ${service}=${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${service}:latest --record
+                            kubectl rollout status deployment/${service}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()  // Limpia el espacio de trabajo al final del pipeline
+        }
+    }
+}

@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tripcode-microservices
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tripcode-microservices
+  template:
+    metadata:
+      labels:
+        app: tripcode-microservices
+    spec:
+      containers:
+        - name: tripcode-microservices
+          images: 

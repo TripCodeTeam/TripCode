@@ -8,6 +8,7 @@ import {
   CreateFirewallRuleDto,
   CreateImageFromVmDto,
   CreateNetworkDto,
+  CreateServiceAccountDto,
   CreateSubnetDto,
   CreateVmDto,
   DeleteVmDto,
@@ -25,6 +26,8 @@ import {
 } from './dto/create-compute.dto';
 
 import {
+  CreateServiceAccountEntity,
+  CreateVmEntity,
   FirewallRuleEntity,
   NetworkEntity,
   SubnetEntity,
@@ -65,7 +68,7 @@ export class ComputeController {
   }
 
   @Post('create')
-  async createVm(@Body() createVmDto: CreateVmDto): Promise<string> {
+  async createVm(@Body() createVmDto: CreateVmDto): Promise<CreateVmEntity> {
     return this.computesService.createVm(createVmDto);
   }
 
@@ -142,5 +145,10 @@ export class ComputeController {
   @Post('create-firewall-rule')
   async createFirewallRule(@Body() createFirewallRuleDto: CreateFirewallRuleDto): Promise<FirewallRuleEntity> {
     return this.computesService.createFirewallRule(createFirewallRuleDto);
+  }
+
+  @Post('iam/service-account')
+  async CreateServiceAccount(@Body() dataServiceAccount: CreateServiceAccountDto) {
+    return this.computesService.createServiceAccount(dataServiceAccount)
   }
 }

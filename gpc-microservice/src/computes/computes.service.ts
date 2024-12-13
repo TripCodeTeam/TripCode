@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import * as fs from "fs/promises"
 import {
   ImagesClient,
   InstancesClient,
   NetworksClient,
   SubnetworksClient,
-  FirewallsClient
+  FirewallsClient,
 } from "@google-cloud/compute"
 
 import {
@@ -14,6 +15,7 @@ import {
   CreateFirewallRuleDto,
   CreateImageFromVmDto,
   CreateNetworkDto,
+  CreateServiceAccountDto,
   CreateSubnetDto,
   CreateVmDto,
   DeleteVmDto,
@@ -29,7 +31,11 @@ import {
   UpdateVmTagsDto
 } from './dto/create-compute.dto';
 
+import { v2 } from "@google-cloud/iam"
+
 import {
+  CreateServiceAccountEntity,
+  CreateVmEntity,
   FirewallRuleEntity,
   NetworkEntity,
   SubnetEntity,
@@ -40,6 +46,7 @@ import {
   VmStatusEntity,
   VmTagsEntity
 } from './entities/compute.entity';
+import { HandlerCreateServiceAccount, ServiceAccountDetails } from 'handlers/auth/Create-service-account';
 
 @Injectable()
 export class ComputesService {
@@ -48,6 +55,7 @@ export class ComputesService {
   private readonly networksClient: NetworksClient;
   private readonly subNetworksClient: SubnetworksClient
   private readonly firewallsClient: FirewallsClient
+  private readonly iamClient: v2.PoliciesClient
 
   constructor() {
     this.instancesClient = new InstancesClient();
@@ -55,6 +63,7 @@ export class ComputesService {
     this.networksClient = new NetworksClient();
     this.subNetworksClient = new SubnetworksClient();
     this.firewallsClient = new FirewallsClient();
+    this.iamClient = new v2.PoliciesClient();
   }
 
   /**
@@ -139,8 +148,9 @@ export class ComputesService {
    * @param createVmDto DTO con los datos necesarios para crear la VM
    * @returns Mensaje confirmando que la instancia fue creada
    */
-  async createVm(createVmDto: CreateVmDto): Promise<string> {
-    const { projectId, zone, vmName, machineType, diskImage, network } = createVmDto;
+  async createVm(createVmDto: CreateVmDto): Promise<CreateVmEntity> {
+    const { projectId, zone, vmName, machineType, diskImage, network, subnetwork } = createVmDto;
+
     const config = {
       project: projectId,
       zone,
@@ -157,15 +167,52 @@ export class ComputesService {
         ],
         networkInterfaces: [
           {
-            network,
+            network: `projects/${projectId}/global/networks/${network}`, // vpc
+            subnetwork: `projects/${projectId}/regions/${zone.split('-')[0]}/subnetworks/${subnetwork}`, // subnet vpc
             accessConfigs: [], // Sin IP externa
           },
         ],
+        serviceAccount: [
+          {
+            email: 'default',
+            scopes: ['https://www.googleapis.com/auth/cloud-platform']
+          },
+        ],
+        metadata: {
+          items: [
+            {
+              key: 'startup-script',
+              value: '#! /bin/bash\n echo "VM is up and running!" > /var/log/startup-script.log',
+            }
+          ]
+        }
       },
     };
 
-    const [response] = await this.instancesClient.insert(config);
-    return `VM ${vmName} is being created. Operation ID: ${response.name}`;
+    try {
+      const [operation] = await this.instancesClient.insert(config);
+
+      const [metadata] = await operation.promise();
+
+      const [vmDetails] = await this.instancesClient.get();
+      const internalIp = vmDetails.networkInterfaces?.[0]?.networkIP || 'Not Available';
+
+      const iapCommand = `gcloud compute ssh ${vmName} --project=${projectId} --zone=${zone} --tunnel-through-iap`;
+
+      return {
+        name: vmName,
+        operationId: operation.name|| 'N/A',
+        internalIp,
+        subnet: subnetwork,
+        zone: zone,
+        commandShh: iapCommand,
+        vmStatus: vmDetails.status,
+        createdAt: vmDetails.creationTimestamp
+      }
+    } catch (error) {
+      console.error('Error creating VM:', error);
+      throw new Error(`Failed to create VM: ${error.message}`);
+    }
   }
 
   /**
@@ -184,12 +231,12 @@ export class ComputesService {
   }
 
   /**
- * Reinicia una instancia específica.
- * @param projectId ID del proyecto
- * @param zone Zona de la instancia
- * @param vmName Nombre de la instancia
- * @returns Mensaje confirmando que la instancia fue reiniciada
- */
+   * Reinicia una instancia específica.
+   * @param projectId ID del proyecto
+   * @param zone Zona de la instancia
+   * @param vmName Nombre de la instancia
+   * @returns Mensaje confirmando que la instancia fue reiniciada
+   */
   async restartVm(restartVmDto: RestartVmDto): Promise<string> {
     const { projectId, zone, vmName } = restartVmDto
     const [response] = await this.instancesClient.reset({
@@ -510,6 +557,7 @@ export class ComputesService {
     };
 
     const [response] = await this.subNetworksClient.insert(subnetConfig);
+
     return new SubnetEntity({
       id: subnetName,
       name: response.name,
@@ -548,5 +596,15 @@ export class ComputesService {
       allowedIps,
       networkName,
     });
+  }
+
+  async createServiceAccount(createServiceAccount: CreateServiceAccountDto): Promise<ServiceAccountDetails> {
+    try {
+      const account = await HandlerCreateServiceAccount(createServiceAccount);
+      // console.log(account)
+      return account
+    } catch (error) {
+
+    }
   }
 }

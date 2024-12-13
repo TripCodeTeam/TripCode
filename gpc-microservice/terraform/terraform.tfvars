@@ -1,0 +1,5 @@
+project_id = "atomic-energy-438322-m8"
+vpc_name = "nombre-vpc-cliente"
+subnet_name = "nombre-subnet-cliente"
+app_name = "gcp-microservice"
+credentials_file = "../credentials/atomic-energy-438322-m8-90bc56e9971a.json"

@@ -1,3 +1,18 @@
+export class CreateVmEntity {
+  name: string;
+  operationId: string;
+  internalIp: string;
+  subnet: string;
+  zone: string;
+  commandShh: string;
+  vmStatus: string;
+  createdAt: string
+
+  constructor(partial: Partial<CreateVmEntity>) {
+    Object.assign(this, partial);
+  }
+}
+
 export class VmEntity {
   id: string | number | Long;
   name: string;
@@ -110,5 +125,11 @@ export class FirewallRuleEntity {
 
   constructor(partial: Partial<FirewallRuleEntity>) {
     Object.assign(this, partial);
+  }
+}
+
+export class CreateServiceAccountEntity {
+  constructor(partial: Partial<CreateServiceAccountEntity>) {
+    Object.assign(this, partial)
   }
 }

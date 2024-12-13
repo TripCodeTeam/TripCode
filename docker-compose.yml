@@ -1,0 +1,20 @@
+services:
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: TPGateway
+    ports:
+      - 3000:3000
+    restart: always
+  
+  gpc-microservice:
+    build:
+      context: ./gcp-microservice
+      dockerfile: Dockerfile
+    container_name: TPGCP-microservice
+    ports:
+      - 3001:3001
+    restart: always
+
+  

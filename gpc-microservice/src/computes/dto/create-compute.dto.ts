@@ -5,6 +5,8 @@ export class CreateVmDto {
     machineType: string
     diskImage: string
     network: string
+    subnetwork: string
+    serviceAccountKey: string
 }
 
 export class GetVmDto {
@@ -138,4 +140,11 @@ export class CreateFirewallRuleDto {
     firewallName: string;
     allowedIps: string[];
     networkName: string;
+}
+
+export class CreateServiceAccountDto {
+    projectId: string;
+    accountId: string;
+    displayName: string;
+    roles: string[]
 }
